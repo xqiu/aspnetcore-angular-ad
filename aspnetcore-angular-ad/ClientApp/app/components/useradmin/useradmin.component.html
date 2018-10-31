@@ -1,0 +1,307 @@
+<p *ngIf="noAccess"><em>{{'general.NoAccessInformation' | translate}}</em></p>
+
+<tabset #staticTabs>
+    <tab heading="{{'admin.Users' | translate}}">
+        <div *ngIf="userInited" class="row">
+            <h4 class="col-sm-1">
+                <button type="button" class="btn btn-primary" (click)="refreshUsers()">{{'general.Refresh' | translate}}</button>
+            </h4>
+            <h4 class="col-sm-1">
+                <a class="btn btn-primary btn-sm" (click)="addMisUser(userTemplate)">{{'admin.AddUser' | translate}}</a>
+            </h4>
+        </div>
+        <p *ngIf="!userInited"><em>{{'general.Loading' | translate}}</em></p>
+        <div *ngIf="userInited">
+            <div class="container-fluid mis-container">
+                <div class="row mis-header">
+                    <div class="col-sm-1">{{'admin.Id' | translate}}</div>
+                    <div class="col-sm-1">{{'admin.Name' | translate}}</div>
+                    <div class="col-sm-2">{{'admin.Email' | translate}}</div>
+                    <div class="col-sm-1">{{'admin.IsAdmin' | translate}}</div>
+                    <div class="col-sm-1">{{'admin.IsActive' | translate}}</div>
+                    <div class="col-sm-1">{{'general.Center' | translate}}</div>
+                    <div class="col-sm-2"><span tooltip="{{'admin.AccessRightsTooltip' | translate}}">{{'admin.AccessRights' | translate}} (RWA)</span></div>
+                    <div class="col-sm-1">{{'general.Actions' | translate}}</div>
+                </div>
+                <div *ngFor="let user of users" class="row mis-row">
+                    <div class="col-sm-1">{{user.misUserID}}</div>
+                    <div class="col-sm-1">{{user.name}}</div>
+                    <div class="col-sm-2">{{user.identityName}}</div>
+                    <div class="col-sm-1">{{user.isAdmin}}</div>
+                    <div class="col-sm-1">{{user.isActive}}</div>
+                    <div class="col-sm-1">{{getUserCenterName(user)}}</div>
+                    <div class="col-sm-2">
+                        {{getUserModifyRight(user)}}
+                    </div>
+                    <div class="col-sm-1">
+                        <a (click)="editMisUser(userTemplate, user)">{{'general.Edit' | translate}}</a>&nbsp;&nbsp;
+                        <a (click)="deleteMisUser(user)">{{'general.Delete' | translate}}</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </tab>
+    <tab heading="{{'admin.RegionsAndCenters' | translate}}">
+        <div *ngIf="regionInited" class="row">
+            <h4 class="col-sm-1">
+                <button type="button" class="btn btn-primary" (click)="refreshRegions()">{{'general.Refresh' | translate}}</button>
+            </h4>
+            <h4 class="col-sm-1">
+                <a *ngIf="regionInited" class="btn btn-primary btn-sm" (click)="addRegion(regionTemplate)">{{'admin.AddRegion' | translate}}</a>
+            </h4>
+        </div>
+        <p *ngIf="!regionInited"><em>{{'general.Loading' | translate}}</em></p>
+        <div *ngIf="regionInited">
+            <div class="container-fluid mis-container">
+                <div *ngFor="let region of regions" class="mis-row">
+                    <div class="row">
+                        <div class="col-sm-2">
+                            <h4>
+                                {{region.name}}
+                            </h4>
+                        </div>
+                        <div class="col-sm-10">
+                            <h4>
+                                <a (click)="editRegion(regionTemplate, region)">{{'general.Edit' | translate}}</a>&nbsp;&nbsp;
+                                <a (click)="deleteRegion(region)" *ngIf="region.centers.length == 0">{{'general.Delete' | translate}}</a>&nbsp;&nbsp;
+                                <a (click)="addCenter(centerTemplate, region)">+ {{'general.Center' | translate}}</a>
+                            </h4>
+                        </div>
+                    </div>
+                    <div class="container-fluid ">
+                        <div *ngFor="let center of region.centers" class="row mis-row">
+                            <div class="col-sm-2">
+                                &nbsp;&nbsp;&nbsp;&nbsp;{{center.name}}
+                            </div>
+                            <div class="col-sm-2">
+                                <span *ngIf="center.doNotTrackMonthStatus==false">{{'admin.TrackStatus' | translate}}</span>
+                                <span *ngIf="center.doNotTrackMonthStatus">{{'admin.DoNotTrackStatus' | translate}}</span>
+                            </div>
+                            <div class="col-sm-2">
+                                <span *ngIf="center.isRegionHQ==true">{{'admin.IsRegionHQ' | translate}}</span>
+                            </div>
+                            <div class="col-sm-2">
+                                {{center.notificationEmail}}
+                            </div>
+                            <div class="col-sm-4">
+                                <a (click)="editCenter(centerTemplate, center)">{{'general.Edit' | translate}}</a>&nbsp;&nbsp;
+                                <a (click)="deleteCenter(center)">{{'general.Delete' | translate}}</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </tab>
+    <tab heading="{{'admin.EmailTemplates' | translate}}">
+        <p *ngIf="!userInited"><em>{{'general.Loading' | translate}}</em></p>
+        <div *ngIf="userInited">
+            <div class="row">
+                <h4 class="col-sm-1">
+                    <button type="button" class="btn btn-primary" (click)="queryEmailTemplates()">{{'general.Refresh' | translate}}</button>
+                </h4>
+                <h4 class="col-sm-1">
+                    <a (click)="addEmailTemplate(emailTemplateTemplate)" class="btn btn-primary">{{'general.Add' | translate}}</a>&nbsp;&nbsp;
+                </h4>
+            </div>
+
+            <div class="container-fluid mis-container">
+                <div class="row mis-header">
+                    <div class="col-sm-1"><span class="table-index">#</span></div>
+                    <div class="col-sm-1">{{'admin.EmailTemplateIsForMonthStatusNotification' | translate}}</div>
+                    <div class="col-sm-3">{{'admin.EmailTemplateSubject' | translate}}</div>
+                    <div class="col-sm-6">{{'admin.EmailTemplateMessage' | translate}}</div>
+                </div>
+                <ng-container *ngFor="let record of emailTemplates; let i = index;">
+                    <div class="row mis-row">
+                        <div class="col-sm-1"><span class="table-index">{{i+1}}</span></div>
+                        <div class="col-sm-1">{{record.isForMonthStatusNotification}}</div>
+                        <div class="col-sm-3">{{record.subject}}</div>
+                        <div class="col-sm-6">{{record.message}}</div>
+
+                        <div class="col-sm-1">
+                            <a (click)="editEmailTemplate(emailTemplateTemplate, record)" class="btn btn-primary btn-sm">{{'general.Edit' | translate}}</a>&nbsp;&nbsp;
+                            <a (click)="deleteEmailTemplate(record)" class="btn btn-primary btn-sm">{{'general.Delete' | translate}}</a>&nbsp;&nbsp;
+                        </div>
+                    </div>
+                </ng-container>
+            </div>
+        </div>
+    </tab>
+</tabset>
+
+
+<!-- Modal -->
+<ng-template #regionTemplate>
+    <div class="modal-header">
+        <button type="button" class="close" (click)="regionModalRef.hide()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="regionModelLabel">{{'admin.CreateOrEditRegion' | translate}}</h4>
+    </div>
+    <div class="modal-body">
+        <input type="text" [(ngModel)]="regionModify.name" />
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-default" (click)="regionModalRef.hide()">{{'general.Close' | translate}}</button>
+        <button type="button" class="btn btn-primary" (click)="modifyRegion()">{{'general.Save' | translate}}</button>
+    </div>
+</ng-template>
+
+<!-- Modal -->
+<ng-template #centerTemplate>
+    <div class="modal-header">
+        <button type="button" class="close" (click)="centerModalRef.hide()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="centerModelLabel">{{'admin.CreateOrEditUser' | translate}}</h4>
+    </div>
+    <div class="modal-body">
+        <div class="form-group row">
+            <div class="col-sm-3">
+                <label for="centername">{{'admin.Name' | translate}}</label>
+            </div>
+            <div class="col-sm-9">
+                <input id="centername" name="centername" type="text" required [(ngModel)]="centerModify.name" />
+            </div>
+        </div>
+
+        <div class="form-group row">
+            <div class="col-sm-3">
+                <label for="centeremail">{{'admin.NotificationEmail' | translate}} ({{'admin.EmailTooltip' | translate}})</label>
+            </div>
+            <div class="col-sm-9">
+                <input id="centeremail" name="centeremail" type="email" required [(ngModel)]="centerModify.notificationEmail" />
+            </div>
+        </div>
+
+        <div class="form-group row">
+            <div class="col-sm-3">
+                <label for="doNotTrackMonthStatus">{{'admin.DoNotTrackStatus' | translate}}</label>
+            </div>
+            <div class="col-sm-1">
+                <input id="doNotTrackMonthStatus" name="doNotTrackMonthStatus" type="checkbox" [(ngModel)]="centerModify.doNotTrackMonthStatus" />
+            </div>
+        </div>
+
+        <div class="form-group row">
+            <div class="col-sm-3">
+                <label for="isRegionHQ">{{'admin.IsRegionHQ' | translate}}</label>
+            </div>
+            <div class="col-sm-1">
+                <input id="isRegionHQ" name="isRegionHQ" type="checkbox" [(ngModel)]="centerModify.isRegionHQ" />
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-default" (click)="centerModalRef.hide()">{{'general.Close' | translate}}</button>
+        <button type="button" class="btn btn-primary" (click)="modifyCenter()">{{'general.Save' | translate}}</button>
+    </div>
+</ng-template>
+
+<!-- Modal -->
+<ng-template #userTemplate>
+    <div class="modal-header">
+        <button type="button" class="close" (click)="misUserModalRef.hide()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="userModelLabel">{{'admin.CreateOrEditUser' | translate}}</h4>
+    </div>
+    <div class="modal-body">
+        <form>
+            <div class="form-group">
+                <label for="username">{{'admin.Name' | translate}}</label>
+                <input id="username" name="username" type="text" required [(ngModel)]="misUserModify.name" />
+            </div>
+            <div class="form-group">
+                <label for="useremail">{{'admin.Email' | translate}}</label>
+                <input id="useremail" name="useremail" type="email" required [(ngModel)]="misUserModify.identityName" />
+            </div>
+            <div class="form-group">
+                <div class="checkbox">
+                    <label>
+                        <input name="userisAdmin" type="checkbox" [(ngModel)]="misUserModify.isAdmin"> {{'admin.IsAdmin' | translate}}
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="checkbox">
+                    <label>
+                        <input name="userisActive" type="checkbox" [(ngModel)]="misUserModify.isActive"> {{'admin.IsActive' | translate}}
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="usercenter">{{'general.Center' | translate}} </label>
+                <select id="usercenter" name="usercenter" required [(ngModel)]="misUserModify.centerID">
+                    <optgroup *ngFor="let region of regions" label="{{region.name}}">
+                        <option *ngFor="let center of region.centers" [value]="center.centerID">{{center.name}}</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div>
+                <h4>{{'admin.AccessRights' | translate}}  &nbsp;<a (click)="addUserRight(misUserModify)">{{'general.Add' | translate}}</a></h4>
+            </div>
+            <div *ngFor="let modifyRight of misUserModify.modifyRights; let i = index;">
+                <span>
+                    <select id="myRightCenter{{i}}" name="myRightCenter{{i}}" required [(ngModel)]="modifyRight.centerID">
+                        <optgroup *ngFor="let region of regions" label="{{region.name}}">
+                            <option *ngFor="let center of region.centers" [value]="center.centerID">{{center.name}}</option>
+                        </optgroup>
+                    </select>
+                    <a (click)="deleteModifyRights(i)">&nbsp;&nbsp;{{'general.Delete' | translate}}</a>
+                </span>
+                <span class="checkbox">
+                    <label>
+                        <input name="myRightCanRead{{i}}" type="checkbox" [(ngModel)]="modifyRight.canRead">{{'admin.Read' | translate}} &nbsp;
+                    </label>
+                    <label>
+                        <input name="myRightCanWrite{{i}}" type="checkbox" [(ngModel)]="modifyRight.canWrite">{{'admin.Write' | translate}} &nbsp;
+                    </label>
+                    <label>
+                        <input name="myRightCanAdmin{{i}}" type="checkbox" [(ngModel)]="modifyRight.canAdmin">{{'admin.Admin' | translate}} &nbsp;
+                    </label>
+                </span>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" (click)="misUserModalRef.hide()">{{'general.Close' | translate}}</button>
+                <button type="button" class="btn btn-primary" (click)="modifyMisUser()">{{'general.Save' | translate}}</button>
+            </div>
+        </form>
+    </div>
+</ng-template>
+
+
+<ng-template #emailTemplateTemplate>
+    <div class="modal-header">
+        <button type="button" class="close" (click)="emailTemplateModalRef.hide()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="emailTemplateModelLabel">{{'admin.CreateNewEmailTemplate' | translate}}</h4>
+    </div>
+    <div class="modal-body">
+        <div class="form-group row">
+            <div class="col-sm-2">
+                <label for="emailTemplateSubject">{{'admin.EmailTemplateSubject' | translate}}</label>
+            </div>
+            <div class="col-sm-10">
+                <input id="emailTemplateSubject" name="emailTemplateSubject" type="text" required [(ngModel)]="emailTemplateModify.subject">
+            </div>
+        </div>
+        <div class="form-group row">
+            <div class="col-sm-2">
+                <label for="emailTemplateMessage">{{'admin.EmailTemplateMessage' | translate}}</label>
+            </div>
+            <div class="col-sm-10">
+                <textarea id="emailTemplateMessage" name="emailTemplateMessage" required [(ngModel)]="emailTemplateModify.message"></textarea>
+            </div>
+        </div>
+
+        <div class="form-group row">
+            <div class="col-sm-2">
+                <label for="emailTemplateIsForMonthStatusNotification">{{'admin.EmailTemplateIsForMonthStatusNotification' | translate}}</label>
+            </div>
+            <div class="col-sm-10">
+                <input id="emailTemplateIsForMonthStatusNotification" name="emailTemplateIsForMonthStatusNotification" type="checkbox" required [(ngModel)]="emailTemplateModify.isForMonthStatusNotification" />
+            </div>
+        </div>
+
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-default" (click)="emailTemplateModalRef.hide()">{{'general.Close' | translate}}</button>
+        <button type="button" class="btn btn-primary" (click)="modifyEmailTemplate()">{{'general.Save' | translate}}</button>
+    </div>
+</ng-template>

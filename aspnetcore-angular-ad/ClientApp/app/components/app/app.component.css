@@ -1,0 +1,113 @@
+@media (max-width: 767px) {
+    /* On small screens, the nav menu spans the full width of the screen. Leave a space for it. */
+    .body-content {
+        padding-top: 50px;
+    }
+}
+
+.mis-container .mis-row {
+    border-bottom: 2px solid #333333;
+    border-right: 2px solid #333333;
+    border-left: 2px solid #333333;
+}
+
+.mis-container .mis-header {
+    border-top: 2px solid #333333;
+    border-right: 2px solid #333333;
+    border-left: 2px solid #333333;
+    border-bottom: 2px solid #333333;
+    font-weight: 700;
+}
+
+.mis-container .mis-row:nth-child(1) {
+    border-top: 2px solid #333333;
+}
+
+.modal-header {
+    background-color: #337ab7;
+    color: white;
+}
+
+    .modal-header .close {
+        color: white;
+        opacity: 1;
+    }
+
+.modal-body input, .modal-body select{
+    width: 80%;
+}
+
+.modal-body textarea {
+    height: 60vh;
+    width: 80%;
+}
+
+.modal-body input[type='checkbox'] {
+    text-align: left;
+    width: 15px;
+}
+
+.mis-row input {
+    width: 90%;
+}
+
+.mis-row-widthauto input {
+    width: auto;
+}
+
+.import-textarea {
+    width: 90%;
+    height: 50vh;
+}
+
+.status-done {
+    color: blue;
+    background-color: #89ee89;
+}
+
+.status-not-done {
+    color: darkred;
+    background-color: yellow;
+}
+
+.excel-export {
+    display: inline-block;
+    width: 23px;
+    height: 23px;
+    background-image: url(/assets/images/excel.png);
+    background-repeat: no-repeat;
+}
+
+.barchart-icon {
+    display: inline-block;
+    width: 23px;
+    height: 23px;
+    background-image: url(/assets/images/bar.png);
+    background-repeat: no-repeat;
+}
+
+.piechart-icon {
+    display: inline-block;
+    width: 23px;
+    height: 23px;
+    background-image: url(/assets/images/pie.png);
+    background-repeat: no-repeat;
+    vertical-align: bottom;
+}
+
+    .excel-export:hover, .barchart-icon:hover, .piechart-icon:hover {
+        cursor: pointer;
+    }
+
+.table-index {
+    display: inline-block;
+    min-width: 25px;
+}
+
+.wrap-break-word {
+    word-wrap: break-word;
+}
+
+.mis-table td{
+    text-align: center;
+}

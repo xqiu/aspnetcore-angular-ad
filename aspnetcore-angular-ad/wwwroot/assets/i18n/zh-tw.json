@@ -1,0 +1,78 @@
+{
+    "navmenu": {
+        "Changelang": "選擇語言",
+        "Home": "簡介",
+        "DashBoard": "看版",
+        "Admin": "管理",
+        "Logout": "登出",
+        "Title": "我的管理系統"
+    },
+    "home": {
+        "Welcome": "歡迎來到我的後台管理系統"
+    },
+    "general": {
+        "SelectTimeFrom": "時間從",
+        "SelectTimeTo": "時間至",
+        "SelectYearMonth": "選擇年月",
+        "Query": "查詢",
+        "Region": "地區",
+        "Center": "禪堂",
+        "YearMonth": "年月",
+        "Actions": "行動",
+        "Save": "保存",
+        "Add": "新增",
+        "Edit": "編輯",
+        "Delete": "刪除",
+        "Memo": "備註",
+        "Import": "導入",
+        "Address": "地址",
+        "TimeSlots": "共修時間",
+        "Loading": "載入中...",
+        "Refresh": "刷新",
+        "Year": "年",
+        "Month": "月",
+        "Close": "關閉",
+        "Total": "合計",
+        "SummaryReportInPeriod": "期間統計表",
+        "SummaryReportByMonth": "按月期間統計表",
+        "SummaryReport": "統計表",
+        "SendNotificationEmail": "電郵",
+        "NoAccessInformation": "您沒有這個功能許可權"
+    },
+    "dashboard": {
+
+    },
+    "admin": {
+        "Users": "用戶管理",
+        "AddUser": "新增用戶",
+        "RegionsAndCenters": "地區和禪堂",
+        "AddRegion": "新增地區",
+        "Id": "標識號",
+        "Name": "姓名",
+        "Email": "電郵地址",
+        "EmailTooltip": "可以用;來區格多個電郵位址。",
+        "IsAdmin": "是否為管理員",
+        "IsActive": "是否啟動",
+        "AccessRights": "許可權",
+        "AccessRightsTooltip": "一個禪堂的許可權包括讀(R),寫(W),管理(A)",
+        "Read": "可讀",
+        "Write": "可寫",
+        "Admin": "可管理",
+        "CreateOrEditUser": "新增或編輯用戶",
+        "CreateOrEditRegion": "新增或編輯地區",
+        "TrackStatus": "跟蹤狀態",
+        "DoNotTrackStatus": "不跟蹤狀態",
+        "IsRegionHQ": "是地區總部",
+        "NotificationEmail": "通知郵箱",
+        "DeleteRegionConfirm": "您確認刪除這個區域嗎？",
+        "DeleteCenterConfirm": "您確認刪除這個禪堂或部門嗎？",
+        "DeleteUserConfirm": "您確認刪除這個用戶嗎？",
+
+        "EmailTemplates": "郵件範本",
+        "DeleteEmailTemplateConfirm": "您確認刪除這個郵件範本嗎？",
+        "EmailTemplateSubject": "標題",
+        "EmailTemplateMessage": "內容",
+        "EmailTemplateIsForMonthStatusNotification": "用於每月狀態通知",
+        "CreateNewEmailTemplate": "新增郵件範本"
+    }
+}

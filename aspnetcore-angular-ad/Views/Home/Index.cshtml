@@ -1,0 +1,16 @@
+@{
+    ViewData["Title"] = "My MIS";
+}
+
+@*<app asp-prerender-module="ClientApp/dist/main-server">Loading...</app>*@
+
+<app>Loading...</app>
+
+<script src="~/dist/vendor.js" asp-append-version="true"></script>
+@section scripts {
+    <script src="~/dist/main-client.js" asp-append-version="true"></script>
+
+    <script>
+        document.getElementById("home1stTimeAction").click(); // Due to prerender does not do auth api calls correctly, we should only enable it after we are shown.
+    </script>
+}
