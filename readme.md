@@ -40,3 +40,9 @@ To get demo work:
         };
 
 4. Run the app through VS. It should initialize the local database by its own. It should bring you to Azure AD login page.  After login, it should redirect you to the localhost's web.
+
+## Utilities
+
+### CodeGenerator
+
+    A easy to use program to generate aspnetcore/angular code to a txt file based on a template.  You then need to copy the code to whereever you need.

@@ -1,0 +1,1434 @@
+﻿MyMisContext.cs:
+
+
+        public DbSet<%ClassName%> %ContextName% { get; set; }
+
+		
+            modelBuilder.Entity<%ClassName%>().ToTable("%ClassName%").HasIndex(b => b.CenterID);
+            modelBuilder.Entity<%ClassName%>().HasIndex(b => b.Deleted);
+            modelBuilder.Entity<%ClassName%>().Property(b => b.Created).HasDefaultValueSql("getdate()");
+            modelBuilder.Entity<%ClassName%>().Property(b => b.Deleted).HasDefaultValue(false);
+
+%ModuleName%Controller.cs:  
+/////////////////////////////
+
+        private Dictionary<string, %ClassName%> _%ClassNameLowercase%s = null;
+
+
+        //api/GetMyWritable%ContextName%
+        [HttpPost("[action]")]
+        public IActionResult GetMyWritable%ContextName%([FromBody] MonthFromTo monthFromTo)
+        {
+            var user = GetCurrentUser();
+            if (!user.IsActive)
+            {
+                return BadRequest();
+            }
+
+            if (user.IsAdmin)
+            {
+                var allRecords =
+                    (from record in _context.%ContextName%
+                     join center in _context.Centers on record.CenterID equals center.CenterID
+                     join region in _context.Regions on center.RegionID equals region.RegionID
+                     where
+                     record.YearMonth >= monthFromTo.MonthFrom &&
+                     record.YearMonth <= monthFromTo.MonthTo &&
+                     !record.Deleted
+                     orderby region.RegionID, center.CenterID, record.YearMonth
+                     select new %ClassName%
+                     {
+                         %ClassName%ID = record.%ClassName%ID,
+                         CenterID = record.CenterID,
+                         %FieldWithoutAuto% = record.%FieldWithoutAuto%,
+                         CenterName = center.Name,
+                         RegionName = region.Name,
+                         Writable = true
+                     }).ToList();
+                return Ok(allRecords);
+            }
+
+            var firstOfThisMonth = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+            var lastMonth = firstOfThisMonth.AddMonths(-1);
+            var records =
+                    (from record in _context.%ContextName%
+                     join right in _context.ModifyRights on record.CenterID equals right.CenterID
+                     join center in _context.Centers on record.CenterID equals center.CenterID
+                     join region in _context.Regions on center.RegionID equals region.RegionID
+                     where right.MisUserID == user.MisUserID &&
+                     right.CanWrite == true &&
+                     record.YearMonth >= monthFromTo.MonthFrom &&
+                     record.YearMonth <= monthFromTo.MonthTo &&
+                     !record.Deleted
+                     orderby region.RegionID, center.CenterID, record.YearMonth
+                     select new %ClassName%
+                     {
+                         %ClassName%ID = record.%ClassName%ID,
+                         CenterID = record.CenterID,
+                         %FieldWithoutAuto% = record.%FieldWithoutAuto%,
+                         CenterName = center.Name,
+                         RegionName = region.Name,
+                         Writable = (record.%FirstFieldDate% >= lastMonth)
+                     }).ToList();
+
+            return Ok(records);
+        }
+
+        [HttpPost("[action]")]
+        public IActionResult Create%ClassName%([FromBody] %ClassName% record)
+        {
+            //if (!CanCurrentUserWrite(record.CenterID))
+            //{
+            //    return BadRequest("Do not have write right for center");
+            //}
+            if (!IsCurrentUserActiveGlobalAdmin())
+            {
+                return BadRequest("Do not have write right to create Data");
+            }
+
+            if (ModelState.IsValid)
+            {
+                var newRecord = new %ClassName%()
+                {
+                    CenterID = record.CenterID,
+                    %FieldWithoutYearMonthAndAuto% = record.%FieldWithoutYearMonthAndAuto%,
+                    YearMonth = MonthFromTo.GetYearMonthFromDate(record.%FirstFieldDate%),
+                    CreatedBy = User.Identity.Name
+                };
+
+                _context.%ContextName%.Add(newRecord);
+                _context.SaveChanges();
+                return Ok(newRecord);
+            }
+
+            var message = string.Join(" | ", ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage));
+            return BadRequest(message);
+        }
+
+
+        [HttpPost("[action]")]
+        public IActionResult Delete%ClassName%([FromBody] %ClassName% record)
+        {
+            //if (!CanCurrentUserWrite(record.CenterID))
+            //{
+            //    return BadRequest("Do not have write right for center");
+            //}
+            if (!IsCurrentUserActiveGlobalAdmin())
+            {
+                return BadRequest("Do not have write right to create Data");
+            }
+
+            if (ModelState.IsValid)
+            {
+                var db%ClassName% = _context.%ContextName%.SingleOrDefault(b => b.%ClassName%ID == record.%ClassName%ID);
+                if (db%ClassName% != null)
+                {
+                    db%ClassName%.Deleted = true;
+                    db%ClassName%.DeletedAt = DateTime.Now;
+                    db%ClassName%.DeletedBy = User.Identity.Name;
+                    _context.Entry(db%ClassName%).State = EntityState.Modified;
+                    _context.SaveChanges();
+                    return NoContent();
+                }
+            }
+
+            var message = string.Join(" | ", ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage));
+            return BadRequest(message);
+        }
+
+        [HttpPost("[action]")]
+        public IActionResult Update%ClassName%([FromBody] %ClassName% record)
+        {
+            //if (!CanCurrentUserWrite(record.CenterID))
+            //{
+            //    return BadRequest("Do not have write right for center");
+            //}
+            if (!IsCurrentUserActiveGlobalAdmin())
+            {
+                return BadRequest("Do not have write right to create Data");
+            }
+
+            if (ModelState.IsValid)
+            {
+                var db%ClassName% = _context.%ContextName%.SingleOrDefault(b => b.%ClassName%ID == record.%ClassName%ID);
+
+                db%ClassName%.CenterID = record.CenterID;
+                db%ClassName%.%FieldWithoutYearMonthAndAuto%  = record.%FieldWithoutYearMonthAndAuto%;
+                db%ClassName%.YearMonth = MonthFromTo.GetYearMonthFromDate(record.%FirstFieldDate%);
+                db%ClassName%.Created = DateTime.Now;
+                db%ClassName%.CreatedBy = User.Identity.Name;
+
+                _context.Entry(db%ClassName%).State = EntityState.Modified;
+                _context.SaveChanges();
+
+                var nameInfo = RegionCenterName.GetName(record.CenterID, _context);
+                if (nameInfo != null)
+                {
+                    db%ClassName%.RegionName = nameInfo.RegionName;
+                    db%ClassName%.CenterName = nameInfo.CenterName;
+                }
+
+                return Ok(db%ClassName%);
+            }
+
+            var message = string.Join(" | ", ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage));
+            return BadRequest(message);
+        }
+
+
+        [HttpPost("[action]")]
+        public IActionResult Import%ContextName%([FromBody] RecordImport importStr)
+        {
+            if (!IsCurrentUserActiveGlobalAdmin())
+            {
+                return BadRequest();
+            }
+
+            CacheDbs();
+            if (_%ClassNameLowercase%s == null)
+            {
+                _%ClassNameLowercase%s = new Dictionary<string, %ClassName%>();
+            }
+            foreach (var point in _context.%ContextName%)
+            {
+                _%ClassNameLowercase%s.Add(point.GetDictKey(), point);
+            }
+
+            var importReturn = ImportReturn.PerformImport(importStr, Process%ClassName%Line);
+
+            var statusList = (from record in _context.%ContextName%
+                              group record by new { record.CenterID, record.YearMonth } into g
+                              select new CenterMonthStatus
+                              {
+                                  CenterID = g.Key.CenterID,
+                                  YearMonth = g.Key.YearMonth
+                              }).ToList();
+
+            var dict = new Dictionary<int, CenterMonthStatus>();
+            foreach(var existingStatus in _context.CenterMonthStatus.ToList())
+            {
+                var key = existingStatus.CenterID * 100000 + existingStatus.YearMonth;
+                if (!dict.ContainsKey(key))
+                {
+                    dict.Add(key, existingStatus);
+                }
+            }
+
+            foreach (var status in statusList)
+            {
+                var key = status.CenterID * 100000 + status.YearMonth;
+                if (!dict.ContainsKey(key))
+                {
+                    var newStatus = new CenterMonthStatus
+                    {
+                        CenterID = status.CenterID,
+                        YearMonth = status.YearMonth,
+                         %ModuleName%%ClassName%Done = true
+                    };
+                    _context.CenterMonthStatus.Add(newStatus);
+                    _context.SaveChanges();
+                }
+                else if (!dict[key].%ModuleName%%ClassName%Done)
+                {
+                    dict[key].%ModuleName%%ClassName%Done = true;
+                    _context.Entry(dict[key]).State = EntityState.Modified;
+                    _context.SaveChanges();
+                }
+            }
+
+            return Ok(importReturn);
+        }
+
+        private string Process%ClassName%Line(string[] fields)
+        {
+            //fields[0] 國家_Country
+            //fields[1] 禪堂_Centre
+            //fields[%FieldIndex2%] %Field%
+
+            if (fields.Length < 10)
+            {
+                return "missing field";
+            }
+
+            if (fields[0].Length == 0 && fields[1].Length == 0 %FieldLengthCheck2%)
+            {
+                //empty line, just ignore
+                return "";
+            }
+
+            var regionName = Helper.EnsureMaxLength(fields[0], 50);
+            regionName = regionName.TrimStart('_');
+            if (!_regions.ContainsKey(regionName))
+            {
+                return "region not found";
+            }
+            var region = _regions[regionName];
+
+            var centerName = Helper.EnsureMaxLength(fields[1], 50);
+            centerName = Helper.ConverCenterName(centerName);
+            centerName = Helper.ConverCenterNameForRegionHQ(centerName, region.RegionID, _context);
+            var centerKey = Center.GetDictKey(region.RegionID, centerName);
+            if (!_centers.ContainsKey(centerKey))
+            {
+                return "center not found";
+            }
+            var center = _centers[centerKey];
+
+            var %FirstFieldDateFirstLetterLower% = DateTime.Now;
+            if (string.IsNullOrEmpty(fields[2]) || !DateTime.TryParse(fields[2], out %FirstFieldDateFirstLetterLower%))
+            {
+                return "date is in wrong format";
+            }
+            if (%FirstFieldDateFirstLetterLower% > DateTime.Now || %FirstFieldDateFirstLetterLower% < new DateTime(2014, 1, 1))
+            {
+                return "date is out of range";
+            }
+            var yearMonth = MonthFromTo.GetYearMonthFromDate(%FirstFieldDateFirstLetterLower%);
+
+            int year = 2018;
+            if (!int.TryParse(fields[3], out year))
+            {
+                return "wrong year";
+            }
+
+            if (year < 2014)
+            {
+                return "wrong year";
+            }
+
+            if (year != %FirstFieldDateFirstLetterLower%.Year)
+            {
+                return "year not matching %FirstFieldDateFirstLetterLower% date";
+            }
+
+            int month = 1;
+            if (!int.TryParse(fields[4], out month))
+            {
+                return "wrong month";
+            }
+
+            if (month < 1 || month > 12)
+            {
+                return "wrong month";
+            }
+            if (month != %FirstFieldDateFirstLetterLower%.Month)
+            {
+                return "month not matching %FirstFieldDateFirstLetterLower% date";
+            }
+
+            var %FieldStringFirstLetterLower% = Helper.EnsureMaxLength(fields[5], 127);
+
+            int %FieldNumberFirstLetterLower% = 0;
+            int.TryParse(fields[9], out %FieldNumberFirstLetterLower%);
+
+            var key = %ClassName%.GetDictKey(center.CenterID, yearMonth, name);
+            if (!_%ClassNameLowercase%s.ContainsKey(key))
+            {
+                var record = new %ClassName%()
+                {
+                    CenterID = center.CenterID,
+					%FieldWithoutYearMonthAndAuto% = %FieldLowerCaseFirst%,
+                    YearMonth = MonthFromTo.GetYearMonthFromDate(%FirstFieldDateFirstLetterLower%)
+                };
+                _context.%ContextName%.Add(record);
+                //_context.SaveChanges();
+                _%ClassNameLowercase%s.Add(key, record);
+            }
+            else
+            {
+                //var record = _%ClassNameLowercase%s[key];
+                //record.CenterID = center.CenterID;
+                //record.%FieldWithoutYearMonthAndAuto% = %FieldLowerCaseFirst%;
+                //record.YearMonth = MonthFromTo.GetYearMonthFromDate(%FirstFieldDateFirstLetterLower%);
+
+                //_context.Entry(record).State = EntityState.Modified;
+                //_context.SaveChanges();
+                return "Found existing, do not overwrite.";
+            }
+
+            return null;
+        }
+////////////////////
+
+%ContextName%ReportController.cs:
+
+        [HttpPost("[action]")]
+        public IActionResult Get%ClassName%ReportMonthly([FromBody] QueryOption queryOption)
+        {
+            var user = GetCurrentUser();
+            if (!user.IsActive)
+            {
+                return BadRequest();
+            }
+
+            //select reg.Name, c.Name, r.YearMonth, 
+			//sum(r.%FieldNumber%), 
+			//count(r.%ClassName%ID)
+            //from %ClassName% r
+            //join Center c on r.CenterID = c.CenterID
+            //join Region reg on reg.RegionID = c.RegionID
+            //where r.YearMonth <= 201708 and r.YearMonth >= 201704
+            //group by reg.Name, c.Name, r.YearMonth
+            //order by reg.Name, c.Name, r.YearMonth;
+
+            IQueryable<%ClassName%Data> allData = null;
+            if (user.IsAdmin)
+            {
+                allData = from r in _context.%ContextName%
+                           join center in _context.Centers on r.CenterID equals center.CenterID
+                           join region in _context.Regions on center.RegionID equals region.RegionID
+                           where r.Deleted == false &&
+                                 r.Deleted == false &&
+                                 center.Deleted == false &&
+                                 region.Deleted == false &&
+                                 r.YearMonth >= queryOption.MonthFromTo.MonthFrom &&
+                                 r.YearMonth <= queryOption.MonthFromTo.MonthTo
+                           orderby region.RegionID, center.CenterID, r.YearMonth
+                           select new %ClassName%Data
+                           {
+                               RegionName = region.Name,
+                               CenterName = center.Name,
+							   YearMonth = r.YearMonth,
+							   %FieldNumber% = r.%FieldNumber%,
+                           };
+            }
+            else
+            {
+                allData = from r in _context.%ContextName%
+                           join center in _context.Centers on r.CenterID equals center.CenterID
+                           join region in _context.Regions on center.RegionID equals region.RegionID
+                           join right in _context.ModifyRights on center.CenterID equals right.CenterID
+                           where right.MisUserID == user.MisUserID &&
+                                 right.CanRead == true &&
+                                 r.Deleted == false &&
+                                 center.Deleted == false &&
+                                 region.Deleted == false &&
+                                 r.YearMonth >= queryOption.MonthFromTo.MonthFrom &&
+                                 r.YearMonth <= queryOption.MonthFromTo.MonthTo
+                           orderby region.RegionID, center.CenterID, r.YearMonth
+                           select new %ClassName%Data
+                           {
+                               RegionName = region.Name,
+                               CenterName = center.Name,
+							   YearMonth = r.YearMonth,
+							   %FieldNumber% = r.%FieldNumber%,
+                           };
+            }
+
+            List<%ClassName%Data> sumData = null;
+            switch (queryOption.GroupBy)
+            {
+                case "region-center-yearmonth":
+                    sumData = (from a in allData
+                               group a by new { a.RegionName, a.CenterName, a.YearMonth } into g
+                               select new %ClassName%Data
+                               {
+                                   RegionName = g.Key.RegionName,
+                                   CenterName = g.Key.CenterName,
+                                   YearMonth = g.Key.YearMonth,
+                                   %FieldNumber% = g.Sum(x => x.%FieldNumber%),
+                                   Count%ClassName% = g.Count()
+                               }).ToList();
+                    break;
+                case "region-center":
+                    sumData = (from a in allData
+                               group a by new { a.RegionName, a.CenterName } into g
+                               select new %ClassName%Data
+                               {
+                                   RegionName = g.Key.RegionName,
+                                   CenterName = g.Key.CenterName,
+                                   %FieldNumber% = g.Sum(x => x.%FieldNumber%),
+                                   Count%ClassName% = g.Count()
+                               }).ToList();
+                    break;
+                case "region-yearmonth":
+                    sumData = (from a in allData
+                               group a by new { a.RegionName, a.YearMonth } into g
+                               select new %ClassName%Data
+                               {
+                                   RegionName = g.Key.RegionName,
+                                   YearMonth = g.Key.YearMonth,
+                                   %FieldNumber% = g.Sum(x => x.%FieldNumber%),
+                                   Count%ClassName% = g.Count()
+                               }).ToList();
+                    break;
+                case "region":
+                    sumData = (from a in allData
+                               group a by new { a.RegionName } into g
+                               select new %ClassName%Data
+                               {
+                                   RegionName = g.Key.RegionName,
+                                   %FieldNumber% = g.Sum(x => x.%FieldNumber%),
+                                   Count%ClassName% = g.Count()
+                               }).ToList();
+                    break;
+            }
+
+            switch (queryOption.SortBy)
+            {
+                case "%FieldNumberFirstLetterLower%-desc": return Ok(sumData.OrderByDescending(x => x.%FieldNumber%));
+                case "%FieldNumberFirstLetterLower%-asc": return Ok(sumData.OrderBy(x => x.%FieldNumber%));
+                case "count%ClassName%-desc": 
+                    return Ok(sumData.OrderByDescending(x => x.Count%ClassName%));
+                case "count%ClassName%-asc": 
+                    return Ok(sumData.OrderBy(x => x.Count%ClassName%));
+                default:
+                    return Ok(sumData);
+            }
+        }
+
+////////////////////
+models/%ModuleNameLowercase%.ts
+
+export interface %ClassName% {
+    %ClassNameLowercase%ID: number;
+    centerID: number;
+    %FieldDateFirstLetterLower%: Date;
+    yearMonth: number;
+    %FieldStringFirstLetterLower%: string;
+    %FieldNumberFirstLetterLower%: number;
+    %FieldBoolFirstLetterLower%: boolean;
+    created: Date;
+    createdBy: number;
+    centerName: string;
+    regionName: string;
+    writable: boolean;
+}
+
+export class %ClassName%Class {
+    static createNew(): %ClassName% {
+        var new%ClassName%: %ClassName% = {
+            %ClassNameLowercase%ID: 0,
+            %FieldDateFirstLetterLower%: new Date(),
+            yearMonth: 0,
+            %FieldStringFirstLetterLower%: '',
+            %FieldNumberFirstLetterLower%: 0,
+            %FieldBoolFirstLetterLower%: false,
+            centerID: 0,
+            created: new Date(),
+            createdBy: 0,
+            centerName: '',
+            regionName: '',
+            writable: true
+        };
+        return new%ClassName%;
+    }
+
+    static clone(record: %ClassName%): %ClassName% {
+        var newrecord: %ClassName% = {
+            %ClassNameLowercase%ID: record.%ClassNameLowercase%ID,
+            centerID: record.centerID,
+            %FieldDateFirstLetterLower%: record.%FieldDateFirstLetterLower%,
+            yearMonth: record.yearMonth,
+            %FieldStringFirstLetterLower%: record.%FieldStringFirstLetterLower%,
+            %FieldNumberFirstLetterLower%: record.%FieldNumberFirstLetterLower%,
+            %FieldBoolFirstLetterLower%: record.%FieldBoolFirstLetterLower%,
+            created: record.created,
+            createdBy: record.createdBy,
+            centerName: record.centerName,
+            regionName: record.regionName,
+            writable: record.writable
+        };
+        return newrecord;
+    }
+
+    static assign(recordFrom: %ClassName%, recordTo: %ClassName%) {
+        recordTo.%ClassNameLowercase%ID = recordFrom.%ClassNameLowercase%ID;
+        recordTo.centerID = recordFrom.centerID;
+        recordTo.%FieldDateFirstLetterLower% = recordFrom.%FieldDateFirstLetterLower%;
+        recordTo.yearMonth = recordFrom.yearMonth;
+        recordTo.%FieldStringFirstLetterLower% = recordFrom.%FieldStringFirstLetterLower%;
+        recordTo.%FieldNumberFirstLetterLower% = recordFrom.%FieldNumberFirstLetterLower%;
+        recordTo.%FieldBoolFirstLetterLower% = recordFrom.%FieldBoolFirstLetterLower%;
+        recordTo.created = recordFrom.created;
+        recordTo.createdBy = recordFrom.createdBy;
+        recordTo.centerName = recordFrom.centerName;
+        recordTo.regionName = recordFrom.regionName;
+        recordTo.writable = recordFrom.writable;
+    }
+}
+
+export interface %ClassName%ByCenterRecord {
+    centerName: string,
+    regionName: string,
+    yearMonth: number,
+    %FieldNumberFirstLetterLower%: number,
+    %FieldBoolFirstLetterLower%: boolean,
+    count%ClassName%: number
+}
+
+////////////////////
+%ModuleNameLowercase%/%ModuleNameLowercase%.component.html:
+<tabset #staticTabs>
+    <tab heading="{{'%ModuleNameLowercase%.%ContextName%' | translate}}">
+        <div class="row">
+            <h4 class="col-sm-3">
+                {{'general.SelectTimeFrom' | translate}}
+                <select id="timeFrom" name="timeFrom" required [(ngModel)]="queryMonth.monthFrom">
+                    <option *ngFor="let yearmonth of yearmonths" [value]="yearmonth">
+                        {{yearmonth}}
+                    </option>
+                </select>
+            </h4>
+            <h4 class="col-sm-3">
+                {{'general.SelectTimeTo' | translate}}
+                <select id="timeTo" name="timeTo" required [(ngModel)]="queryMonth.monthTo">
+                    <option *ngFor="let yearmonth of yearmonths" [value]="yearmonth">
+                        {{yearmonth}}
+                    </option>
+                </select>
+            </h4>
+            <h4 class="col-sm-1">
+                <button type="button" class="btn btn-primary" (click)="query%ContextName%()">{{'general.Query' | translate}}</button>
+            </h4>
+            <h4 class="col-sm-1">
+                <a (click)="add%ClassName%(%ClassNameLowercase%Template)" class="btn btn-primary">{{'general.Add' | translate}}</a>&nbsp;&nbsp;
+            </h4>
+            <h4 class="col-sm-1">
+                <a (click)="showImport%ClassName%(import%ClassName%Template)" class="btn btn-primary">{{'general.Import' | translate}}</a>&nbsp;&nbsp;
+            </h4>
+        </div>
+
+        <div class="container-fluid mis-container">
+            <div class="row mis-header">
+                <div class="col-sm-1"><span class="table-index">#</span>{{'general.Region' | translate}}</div>
+                <div class="col-sm-1">{{'general.Center' | translate}}</div>
+                <div class="col-sm-1">{{'%ModuleNameLowercase%.%ClassName%%FirstFieldDate%' | translate}}</div>
+                <div class="col-sm-1">{{'%ModuleNameLowercase%.%ClassName%%FieldWithoutYearMonthAndDate%' | translate}}</div>
+                <div class="col-sm-2"><a (click)="export%ContextName%()" class="excel-export"></a></div>
+            </div>
+            <ng-container *ngFor="let record of %ClassNameLowercase%s; let i = index;">
+                <div class="row mis-row">
+                    <div class="col-sm-1"><span class="table-index">{{i}}</span>{{record.regionName}}</div>
+                    <div class="col-sm-1">{{record.centerName}}</div>
+                    <div class="col-sm-1">{{getDateString(record.%FirstFieldDateFirstLetterLower%)}}</div>
+                    <div class="col-sm-1">{{record.%FieldWithoutYearMonthAndDateLowerCase%}}</div>
+                    <div class="col-sm-2">
+                        <a (click)="edit%ClassName%(%ClassNameLowercase%Template, record)" class="btn btn-primary btn-sm">{{'general.Edit' | translate}}</a>&nbsp;&nbsp;
+                        <a (click)="delete%ClassName%(record)" class="btn btn-primary btn-sm">{{'general.Delete' | translate}}</a>&nbsp;&nbsp;
+                    </div>
+                </div>
+            </ng-container>
+        </div>
+    </tab>
+</tabset>
+
+<ng-template #import%ClassName%Template>
+    <div class="modal-header">
+        <button type="button" class="close" (click)="import%ClassName%ModalRef.hide()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="%ClassNameLowercase%ModelLabel">{{'%ModuleNameLowercase%.Import%ClassName%' | translate}}</h4>
+    </div>
+    <div class="modal-body max-height-80vh">
+        <div>
+            <h2>{{'%ModuleNameLowercase%.PleasePaste%ClassName%' | translate}}</h2>
+            <div>
+                <textarea class="import-textarea" id="import%ClassName%Text" name="import%ClassName%Text" [(ngModel)]="%ClassNameLowercase%Import.data" cols="120" rows="30"></textarea>
+            </div>
+            <div>
+                <a class="btn btn-primary btn-lg" (click)="import%ClassName%()">{{'general.Import' | translate}}</a>
+            </div>
+        </div>
+        <div>
+            <h2>{{import%ClassName%Return.msg}}</h2>
+            <p *ngFor="let dataRow of import%ClassName%Return.data">{{dataRow}}</p>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-default" (click)="import%ClassName%ModalRef.hide()">{{'general.Close' | translate}}</button>
+    </div>
+</ng-template>
+
+<ng-template #%ClassNameLowercase%Template>
+    <div class="modal-header">
+        <button type="button" class="close" (click)="%ClassNameLowercase%ModalRef.hide()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="%ClassNameLowercase%ModelLabel">{{'%ModuleNameLowercase%.CreateNew%ClassName%' | translate}}</h4>
+    </div>
+    <div class="modal-body max-height-80vh">
+        <div class="form-group row">
+            <div class="col-sm-2">
+                <label for="%ClassNameLowercase%center">{{'general.Center' | translate}}</label>
+            </div>
+            <div class="col-sm-10">
+                <select id="%ClassNameLowercase%center" name="%ClassNameLowercase%center" required [(ngModel)]="%ClassNameLowercase%Modify.centerID">
+                    <optgroup *ngFor="let region of regions" label="{{region.name}}">
+                        <option *ngFor="let center of region.centers" [value]="center.centerID">{{center.name}}</option>
+                    </optgroup>
+                </select>
+            </div>
+        </div>
+        <div class="form-group row">
+            <div class="col-sm-2">
+                <label for="%ClassNameLowercase%%FirstFieldDate%">{{'%ModuleNameLowercase%.%ClassName%%FirstFieldDate%' | translate}}</label>
+            </div>
+            <div class="col-sm-10">
+                <input id="%ClassNameLowercase%%FirstFieldDate%" name="%ClassNameLowercase%%FirstFieldDate%" type="date" required [ngModel]="getDateString(%ClassNameLowercase%Modify.%FirstFieldDateFirstLetterLower%)" (ngModelChange)="%ClassNameLowercase%Modify.%FirstFieldDateFirstLetterLower% = $event" />
+            </div>
+        </div>
+		<!-- Check if need this kind of select
+        <div class="form-group row">
+            <div class="col-sm-2">
+                <label for="%ClassNameLowercase%Type">{{'%ModuleNameLowercase%.%ClassName%Type' | translate}}</label>
+            </div>
+            <div class="col-sm-10">
+                <select id="%ClassNameLowercase%Type" name="%ClassNameLowercase%Type" required [(ngModel)]="%ClassNameLowercase%Modify.type">
+                    <option *ngFor="let type of %ClassNameLowercase%Types" [value]="type">{{type}}</option>
+                </select>
+            </div>
+        </div> -->
+        <div class="form-group row">            %LINEFEED%<div class="col-sm-2">                %LINEFEED%<label for="%ClassNameLowercase%%FieldString%">{{'%ModuleNameLowercase%.%ClassName%%FieldString%' | translate}}</label>            %LINEFEED%</div>            %LINEFEED%<div class="col-sm-10">                %LINEFEED%<input id="%ClassNameLowercase%%FieldString%" name="%ClassNameLowercase%%FieldString%" type="text" required [(ngModel)]="%ClassNameLowercase%Modify.%FieldStringFirstLetterLower%" />            %LINEFEED%</div>        %LINEFEED%</div>
+        <div class="form-group row">            %LINEFEED%<div class="col-sm-2">                %LINEFEED%<label for="%ClassNameLowercase%%FieldNumber%">{{'%ModuleNameLowercase%.%ClassName%%FieldNumber%' | translate}}</label>            %LINEFEED%</div>            %LINEFEED%<div class="col-sm-10">                %LINEFEED%<input id="%ClassNameLowercase%%FieldNumber%" name="%ClassNameLowercase%%FieldNumber%" type="number" required [(ngModel)]="%ClassNameLowercase%Modify.%FieldNumberFirstLetterLower%" />            %LINEFEED%</div>        %LINEFEED%</div>
+        <div class="form-group row">            %LINEFEED%<div class="col-sm-2">                %LINEFEED%<label for="%ClassNameLowercase%%FieldBool%">{{'%ModuleNameLowercase%.%ClassName%%FieldBool%' | translate}}</label>            %LINEFEED%</div>            %LINEFEED%<div class="col-sm-10">                %LINEFEED%<input id="%ClassNameLowercase%%FieldBool%" name="%ClassNameLowercase%%FieldBool%" type="checkbox" required [(ngModel)]="%ClassNameLowercase%Modify.%FieldBoolFirstLetterLower%" />            %LINEFEED%</div>        %LINEFEED%</div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-default" (click)="%ClassNameLowercase%ModalRef.hide()">{{'general.Close' | translate}}</button>
+        <button type="button" class="btn btn-primary" (click)="modify%ClassName%()">{{'general.Save' | translate}}</button>
+    </div>
+</ng-template>
+
+
+
+////////////////////
+%ModuleNameLowercase%/%ModuleNameLowercase%.component.ts:
+
+import { Component, Inject, TemplateRef, OnInit} from '@angular/core';
+import { Http } from '@angular/http';
+import { BsModalRef, BsModalService } from 'ngx-bootstrap/modal';
+import { NgxSpinnerService } from 'ngx-spinner';
+import { TranslateService } from '@ngx-translate/core';
+import {
+    MisUser, Center, Region, ModifyRight, ImportReturn, QueryMonth,
+    QueryTimeClass, DownloadClass, IData, TableChartInfoClass
+} from '../../models/common';
+import {
+    %ClassName%, %ClassName%Class
+} from '../../models/%ModuleNameLowercase%';
+
+@Component({
+    selector: '%ModuleNameLowercase%s',
+    templateUrl: './%ModuleNameLowercase%.component.html',
+    styleUrls: ['../app/app.component.css', './%ModuleNameLowercase%.component.css']
+})
+export class %ClassName%Component implements OnInit {
+    public %ClassNameLowercase%s: %ClassName%[] = [];
+
+    public %ClassNameLowercase%Modify: %ClassName% = %ClassName%Class.createNew();
+    public %ClassNameLowercase%Reference: %ClassName% = this.%ClassNameLowercase%Modify;
+    public %ClassNameLowercase%ModalRef: BsModalRef | null = null;
+    public import%ClassName%ModalRef: BsModalRef | null = null;
+    public %ClassNameLowercase%Import: any = { data: null };
+    public import%ClassName%Return: ImportReturn = { data: [], msg: '' };
+
+    public langs: string[] = ['%ModuleNameLowercase%.Delete%ClassName%Confirm'];
+    public translatedLangs: IData = {};
+
+    constructor(private http: Http, @Inject('BASE_URL') private baseUrl: string, private modalService: BsModalService, 
+        private spinner: NgxSpinnerService, public translate: TranslateService) {
+        this.onLangChange();
+        this.translate.onLangChange.subscribe((event: any) => {
+            this.onLangChange();
+        });
+        this.query%ContextName%();
+    }
+
+    onLangChange() {
+        this.translate.get(this.langs).subscribe((res: any) => {
+            this.translatedLangs = res;
+        });
+    }
+
+    ngOnInit() {
+    }
+
+    public showError(error: any) {
+        console.error(error);
+        if ((typeof error) == "string") {
+            alert(error);
+        }
+        else {
+            alert(JSON.stringify(error));
+        }
+    }
+
+    public showWait() {
+        this.spinner.show();
+    }
+
+    public stopWait() {
+        this.spinner.hide();
+    }
+	
+    //%ClassNameLowercase%
+    public edit%ClassName%(template: TemplateRef<any>, %ClassNameLowercase%: %ClassName%) {
+        this.%ClassNameLowercase%Modify = %ClassName%Class.clone(%ClassNameLowercase%);
+        this.%ClassNameLowercase%Reference = %ClassNameLowercase%;
+
+        this.%ClassNameLowercase%ModalRef = this.modalService.show(template, { class: 'modal-lg' });
+    }
+
+    public add%ClassName%(template: TemplateRef<any>) {
+        this.%ClassNameLowercase%Modify = %ClassName%Class.createNew();
+        this.%ClassNameLowercase%Reference = this.%ClassNameLowercase%Modify;
+
+        this.%ClassNameLowercase%ModalRef = this.modalService.show(template, { class: 'modal-lg' });
+    }
+
+    public modify%ClassName%() {
+        if (this.%ClassNameLowercase%Modify.%ClassNameLowercase%ID == 0) {
+            //new
+            this.showWait();
+            this.http.post(this.baseUrl + 'api/%ModuleName%/Create%ClassName%', this.%ClassNameLowercase%Modify).subscribe(result => {
+                this.%ClassNameLowercase%Modify = result.json() as %ClassName%;
+                if (this.%ClassNameLowercase%ModalRef != null) {
+                    this.%ClassNameLowercase%ModalRef.hide();
+                }
+                this.query%ContextName%();
+            }, error => {
+                this.showError(error);
+                this.stopWait();
+            });
+        }
+        else {
+            //modify
+            this.http.post(this.baseUrl + 'api/%ModuleName%/Update%ClassName%', this.%ClassNameLowercase%Modify).subscribe(result => {
+                var %ClassNameLowercase%Updated = result.json() as %ClassName%;
+
+                %ClassName%Class.assign(%ClassNameLowercase%Updated, this.%ClassNameLowercase%Reference);
+
+                if (this.%ClassNameLowercase%ModalRef != null) {
+                    this.%ClassNameLowercase%ModalRef.hide();
+                }
+            }, error => this.showError(error));
+        }
+    }
+
+    public delete%ClassName%(record: %ClassName%) {
+        if (window.confirm(this.translatedLangs['%ModuleNameLowercase%.Delete%ClassName%Confirm'] + ' -- ' + record.name)) {
+
+            this.showWait();
+            this.http.post(this.baseUrl + 'api/%ModuleName%/Delete%ClassName%', record).subscribe(result => {
+                this.query%ContextName%();
+            }, error => {
+                this.showError(error);
+                this.stopWait();
+            });
+        }
+    }
+
+    public getIs%ClassName%Writable(record: %ClassName%) {
+        return record.writable;
+    }
+    
+    public query%ContextName%() {
+        this.showWait();
+        this.http.post(this.baseUrl + 'api/%ModuleName%/GetMyWritable%ContextName%', this.queryMonth).subscribe(result => {
+            this.%ClassNameLowercase%s = result.json() as %ClassName%[];
+            this.stopWait();
+        }, error => {
+            this.showError(error);
+            this.stopWait();
+        });
+    }
+
+    public showImport%ClassName%(template: TemplateRef<any>) {
+        this.import%ClassName%ModalRef = this.modalService.show(template, { class: 'modal-lg' });
+    }
+
+    public import%ClassName%() {
+        if (this.%ClassNameLowercase%Import.data == null) {
+            this.showError("Please input some data");
+            return;
+        }
+        this.showWait();
+        this.http.post(this.baseUrl + 'api/%ModuleName%/Import%ContextName%', this.%ClassNameLowercase%Import).subscribe(result => {
+            this.import%ClassName%Return = result.json() as ImportReturn;
+            this.stopWait();
+        }, error => {
+            this.showError(error);
+            this.stopWait();
+        });
+    }
+
+    public export%ContextName%() {
+        var content = "<table border=1>";
+        var columns = ['general.Region', 'general.Center','general.YearMonth',
+		'%ModuleNameLowercase%.%ClassName%%FieldWithoutYearMonth%',
+		];
+        this.translate.get(columns).subscribe((res: any) => {
+            content += TableChartInfoClass.getColumnExportString(columns, res);
+            for (var i = 0; i < this.%ClassNameLowercase%s.length; i++) {
+                var record: %ClassName% = this.%ClassNameLowercase%s[i];
+                var anyDate = QueryTimeClass.getDateString(record.%FieldDateFirstLetterLower%);
+                content += `<tr><td>${record.regionName}</td><td>${record.centerName}</td><td>${record.yearMonth}</td><td>${anyDate}</td>
+                    <td>${record.%FieldWithoutYearMonthAndDateLowerCase%}</td>
+                </tr>`;
+            }
+            content += "<table>";
+            DownloadClass.downloadFile(`%ContextName%-${this.queryMonth.monthFrom}-${this.queryMonth.monthTo}_`, content);
+        });
+    }
+
+////////////////////
+%ModuleNameLowercase%report/%ModuleNameLowercase%.componentreport.html:
+
+    <tab heading="{{'%ModuleNameLowercase%report.%ClassName%ByCenter' | translate}}">
+        <div class="row">
+            <h4 class="col-sm-3">
+                {{'general.SelectTimeFrom' | translate}}
+                <select id="timeFrom" name="timeFrom" required [(ngModel)]="queryMonth.monthFrom">
+                    <option *ngFor="let yearmonth of yearmonths" [value]="yearmonth">
+                        {{yearmonth}}
+                    </option>
+                </select>
+            </h4>
+            <h4 class="col-sm-3">
+                {{'general.SelectTimeTo' | translate}}
+                <select id="timeTo" name="timeTo" required [(ngModel)]="queryMonth.monthTo">
+                    <option *ngFor="let yearmonth of yearmonths" [value]="yearmonth">
+                        {{yearmonth}}
+                    </option>
+                </select>
+            </h4>
+            <h4 class="col-sm-1">
+                <button type="button" class="btn btn-primary" (click)="query%ClassName%ByCenter()">{{'general.Query' | translate}}</button>
+            </h4>
+        </div>
+
+        <h2>{{'general.SummaryReportInPeriod' | translate}}</h2>
+		<h3> todo : togglePie index need to be changed manually </h3>
+        <div class="container-fluid mis-container">
+            <div class="row mis-header">
+                <div class="col-sm-1"><span class="table-index">#</span><a (click)="sort%ClassName%Center('region')">{{'general.Region' | translate}}<span class='glyphicon glyphicon-sort'></span></a></div>
+                <div class="col-sm-2">{{'general.Center' | translate}}</div>
+                <div class="col-sm-1">%LINEFEED%                    <a (click)="sort%ClassName%Center('%FieldNumberFirstLetterLower%')">{{'%ModuleNameLowercase%.%ClassName%%FieldNumber%' | translate}}<span class='glyphicon glyphicon-sort'></span></a>%LINEFEED%                    <a (click)="%ClassNameLowercase%SumByCenterRecordsInfo.togglePie(0)" class="piechart-icon"></a>%LINEFEED%                </div>
+                <div class="col-sm-1">
+                    <a (click)="sort%ClassName%Center('count%ClassName%')">{{'%ModuleNameLowercase%.%ClassName%Count' | translate}}<span class='glyphicon glyphicon-sort'></span></a>
+                </div>
+                <div class="col-sm-2">
+                    <span>
+                        <a (click)="export%ClassNameLowercase%SumByCenterRecords()" class="excel-export"></a>
+                        <a (click)="%ClassNameLowercase%SumByCenterRecordsInfo.toggleBar()" class="barchart-icon"></a>
+                    </span>
+                </div>
+            </div>
+            <ng-container *ngFor="let record of %ClassNameLowercase%SumByCenterRecords; let i = index">
+                <div class="row mis-row">
+                    <div class="col-sm-1"><span class="table-index">{{i}}</span>{{record.regionName}}</div>
+                    <div class="col-sm-2">{{record.centerName}}</div>
+                    <div class="col-sm-1">{{record.%FieldNumberFirstLetterLower%}}</div>
+                    <div class="col-sm-1">{{record.count%ClassName%}}</div>
+                </div>
+            </ng-container>
+            <div class="row mis-footer">
+                <div class="col-sm-1">{{'general.Total' | translate}}</div>
+                <div class="col-sm-2"></div>
+                <div class="col-sm-1">%LINEFEED%                    {{%ClassNameLowercase%SumByCenterRecordsInfo.getTotal(%FieldSumIndex%)}}%LINEFEED%                </div>
+                <div class="col-sm-1">
+                    {{%ClassNameLowercase%SumByCenterRecordsInfo.getTotal(%FieldStatCount%)}}
+                </div>
+            </div>
+        </div>
+        <div *ngIf="%ClassNameLowercase%SumByCenterRecordsInfo.showBar">
+            <div *ngIf="%ClassNameLowercase%SumByCenterRecordsInfo.data.length > 0" [style.height.px]="barChartDataRecordCenterHeight">
+                <canvas baseChart
+                        [datasets]="%ClassNameLowercase%SumByCenterRecordsInfo.data"
+                        [labels]="%ClassNameLowercase%SumByCenterRecordsInfo.label"
+                        [options]="barChartOptions"
+                        [legend]="%ClassNameLowercase%SumByCenterRecordsInfo.showLegend"
+                        [chartType]="%ClassNameLowercase%SumByCenterRecordsInfo.barChartType"
+                        (chartHover)="chartHovered($event)"
+                        (chartClick)="chartClicked($event)"
+                        height="{{%ClassNameLowercase%SumByCenterRecordsInfo.barChartHeight}}"
+                        [style.height.px]="%ClassNameLowercase%SumByCenterRecordsInfo.barChartHeight"></canvas>
+            </div>
+        </div>
+        <div *ngIf="%ClassNameLowercase%SumByCenterRecordsInfo.showPie">
+            <div *ngIf="%ClassNameLowercase%SumByCenterRecordsInfo.pieLabel.length > 0" style="display: block">
+                <canvas baseChart
+                        [data]="%ClassNameLowercase%SumByCenterRecordsInfo.pieData"
+                        [labels]="%ClassNameLowercase%SumByCenterRecordsInfo.pieLabel"
+                        [chartType]="pieChartType"
+                        (chartHover)="chartHovered($event)"
+                        (chartClick)="chartClicked($event)"></canvas>
+            </div>
+        </div>
+
+        <h2>{{'general.SummaryReportByMonth' | translate}}</h2>
+        <div class="container-fluid mis-container">
+            <div class="row mis-header">
+                <div class="col-sm-1"><span class="table-index">#</span><a (click)="sort%ClassName%Center('region')">{{'general.Region' | translate}}<span class='glyphicon glyphicon-sort'></span></a></div>
+                <div class="col-sm-2">{{'general.Center' | translate}}</div>
+                <div class="col-sm-1">{{'general.YearMonth' | translate}}</div>
+                <div class="col-sm-1">%LINEFEED%                    <a (click)="sort%ClassName%Center('%FieldNumberFirstLetterLower%')">{{'%ModuleNameLowercase%.%ClassName%%FieldNumber%' | translate}}<span class='glyphicon glyphicon-sort'></span></a>%LINEFEED%                </div>
+                <div class="col-sm-1">
+                    <a (click)="sort%ClassName%Center('count%ClassName%')">{{'%ModuleNameLowercase%.%ClassName%Count' | translate}}<span class='glyphicon glyphicon-sort'></span></a>
+                </div>
+                <div class="col-sm-2">
+                    <a (click)="export%ClassName%ByCenterRecords()" class="excel-export"></a>
+                    <a (click)="%ClassNameLowercase%ByCenterRecordsInfo.toggleBar()" class="barchart-icon"></a>
+                </div>
+            </div>
+            <ng-container *ngFor="let record of %ClassNameLowercase%ByCenterRecords; let i = index;">
+                <div class="row mis-row">
+                    <div class="col-sm-1"><span class="table-index">{{i}}</span>{{record.regionName}}</div>
+                    <div class="col-sm-2">{{record.centerName}}</div>
+                    <div class="col-sm-1">{{record.yearMonth}}</div>
+                    <div class="col-sm-1">{{record.%FieldNumberFirstLetterLower%}}</div>
+                    <div class="col-sm-1">{{record.count%ClassName%}}</div>
+                </div>
+            </ng-container>
+            <div class="row mis-footer">
+                <div class="col-sm-1">{{'general.Total' | translate}}</div>
+                <div class="col-sm-2"></div>
+                <div class="col-sm-1"></div>
+                <div class="col-sm-1">%LINEFEED%                    {{%ClassNameLowercase%ByCenterRecordsInfo.getTotal(%FieldSumIndex%)}}%LINEFEED%                </div>
+                <div class="col-sm-1">
+                    {{%ClassNameLowercase%ByCenterRecordsInfo.getTotal(%FieldStatCount%)}}
+                </div>
+            </div>
+        </div>
+
+        <div *ngIf="%ClassNameLowercase%ByCenterRecordsInfo.showBar">
+            <div *ngIf="%ClassNameLowercase%ByCenterRecordsInfo.data.length > 0" [style.height.px]="%ClassNameLowercase%ByCenterRecordsInfo.barChartHeight">
+                <canvas baseChart
+                        [datasets]="%ClassNameLowercase%ByCenterRecordsInfo.data"
+                        [labels]="%ClassNameLowercase%ByCenterRecordsInfo.label"
+                        [options]="barChartOptions"
+                        [legend]="%ClassNameLowercase%ByCenterRecordsInfo.showLegend"
+                        [chartType]="%ClassNameLowercase%ByCenterRecordsInfo.barChartType"
+                        (chartHover)="chartHovered($event)"
+                        (chartClick)="chartClicked($event)"
+                        height="{{%ClassNameLowercase%ByCenterRecordsInfo.barChartHeight}}"
+                        [style.height.px]="%ClassNameLowercase%ByCenterRecordsInfo.barChartHeight"></canvas>
+            </div>
+        </div>
+
+        <p>&nbsp;</p>
+    </tab>
+    <tab heading="{{'%ModuleNameLowercase%report.%ClassName%ByRegion' | translate}}">
+        <div class="row">
+            <h4 class="col-sm-3">
+                {{'general.SelectTimeFrom' | translate}}
+                <select id="timeFrom" name="timeFrom" required [(ngModel)]="queryMonth.monthFrom">
+                    <option *ngFor="let yearmonth of yearmonths" [value]="yearmonth">
+                        {{yearmonth}}
+                    </option>
+                </select>
+            </h4>
+            <h4 class="col-sm-3">
+                {{'general.SelectTimeTo' | translate}}
+                <select id="timeTo" name="timeTo" required [(ngModel)]="queryMonth.monthTo">
+                    <option *ngFor="let yearmonth of yearmonths" [value]="yearmonth">
+                        {{yearmonth}}
+                    </option>
+                </select>
+            </h4>
+            <h4 class="col-sm-1">
+                <button type="button" class="btn btn-primary" (click)="query%ClassName%ByRegion()">{{'general.Query' | translate}}</button>
+            </h4>
+        </div>
+
+        <h2>{{'general.SummaryReportInPeriod' | translate}}</h2>
+        <div class="container-fluid mis-container">
+            <div class="row mis-header">
+                <div class="col-sm-1"><span class="table-index">#</span><a (click)="sort%ClassName%Region('region')">{{'general.Region' | translate}}</a></div>
+                <div class="col-sm-1">%LINEFEED%                    <a (click)="sort%ClassName%Region('%FieldNumberFirstLetterLower%')">{{'%ModuleNameLowercase%.%ClassName%%FieldNumber%' | translate}}<span class='glyphicon glyphicon-sort'></span></a>%LINEFEED%                    <a (click)="%ClassNameLowercase%SumByRegionRecordsInfo.togglePie(0)" class="piechart-icon"></a>%LINEFEED%                </div>
+                <div class="col-sm-1">
+                    <a (click)="sort%ClassName%Region('count%ClassName%')">{{'%ModuleNameLowercase%.%ClassName%Count' | translate}}<span class='glyphicon glyphicon-sort'></span></a>
+                    <a (click)="%ClassNameLowercase%SumByRegionRecordsInfo.togglePie(1)" class="piechart-icon"></a>
+                </div>
+                <div class="col-sm-2">
+                    <a (click)="export%ClassNameLowercase%SumByRegionRecords()" class="excel-export"></a>
+                    <a (click)="%ClassNameLowercase%SumByRegionRecordsInfo.toggleBar()" class="barchart-icon"></a>
+                </div>
+            </div>
+            <ng-container *ngFor="let record of %ClassNameLowercase%SumByRegionRecords; let i = index;">
+                <div class="row mis-row">
+                    <div class="col-sm-1"><span class="table-index">{{i}}</span>{{record.regionName}}</div>
+                    <div class="col-sm-1">{{record.%FieldNumberFirstLetterLower%}}</div>
+                    <div class="col-sm-1">{{record.count%ClassName%}}</div>
+                </div>
+            </ng-container>
+            <div class="row mis-footer">
+                <div class="col-sm-1">{{'general.Total' | translate}}</div>
+                <div class="col-sm-1">%LINEFEED%                    {{%ClassNameLowercase%SumByRegionRecordsInfo.getTotal(%FieldSumIndex%)}}%LINEFEED%                </div>
+                <div class="col-sm-1">
+                    {{%ClassNameLowercase%SumByRegionRecordsInfo.getTotal(%FieldStatCount%)}}
+                </div>
+            </div>
+        </div>
+
+        <div *ngIf="%ClassNameLowercase%SumByRegionRecordsInfo.showBar">
+            <div *ngIf="%ClassNameLowercase%SumByRegionRecordsInfo.data.length > 0" [style.height.px]="barChartDataRecordCenterHeight">
+                <canvas baseChart
+                        [datasets]="%ClassNameLowercase%SumByRegionRecordsInfo.data"
+                        [labels]="%ClassNameLowercase%SumByRegionRecordsInfo.label"
+                        [options]="barChartOptions"
+                        [legend]="%ClassNameLowercase%SumByRegionRecordsInfo.showLegend"
+                        [chartType]="%ClassNameLowercase%SumByRegionRecordsInfo.barChartType"
+                        (chartHover)="chartHovered($event)"
+                        (chartClick)="chartClicked($event)"
+                        height="{{%ClassNameLowercase%SumByRegionRecordsInfo.barChartHeight}}"
+                        [style.height.px]="%ClassNameLowercase%SumByRegionRecordsInfo.barChartHeight"></canvas>
+            </div>
+        </div>
+        <div *ngIf="%ClassNameLowercase%SumByRegionRecordsInfo.showPie">
+            <div *ngIf="%ClassNameLowercase%SumByRegionRecordsInfo.pieLabel.length > 0" style="display: block">
+                <canvas baseChart
+                        [data]="%ClassNameLowercase%SumByRegionRecordsInfo.pieData"
+                        [labels]="%ClassNameLowercase%SumByRegionRecordsInfo.pieLabel"
+                        [chartType]="pieChartType"
+                        (chartHover)="chartHovered($event)"
+                        (chartClick)="chartClicked($event)"></canvas>
+            </div>
+        </div>
+
+        <h2>{{'general.SummaryReportByMonth' | translate}}</h2>
+        <div class="container-fluid mis-container">
+            <div class="row mis-header">
+                <div class="col-sm-1"><span class="table-index">#</span><a (click)="sort%ClassName%Region('region')">{{'general.Region' | translate}}<span class='glyphicon glyphicon-sort'></span></a></div>
+                <div class="col-sm-1">{{'general.YearMonth' | translate}}</div>
+                <div class="col-sm-1">%LINEFEED%                    <a (click)="sort%ClassName%Region('%FieldNumberFirstLetterLower%')">{{'%ModuleNameLowercase%.%ClassName%%FieldNumber%' | translate}}<span class='glyphicon glyphicon-sort'></span></a>%LINEFEED%                </div>%LINEFEED%
+                <div class="col-sm-1">
+                    <a (click)="sort%ClassName%Region('count%ClassName%')">{{'%ModuleNameLowercase%.%ClassName%Count' | translate}}<span class='glyphicon glyphicon-sort'></span></a>
+                </div>
+                <div class="col-sm-2">
+                    <a (click)="export%ClassName%ByRegionRecords()" class="excel-export"></a>
+                    <a (click)="%ClassNameLowercase%ByRegionRecordsInfo.toggleBar()" class="barchart-icon"></a>
+                </div>
+            </div>
+            <ng-container *ngFor="let record of %ClassNameLowercase%ByRegionRecords; let i = index;">
+                <div class="row mis-row">
+                    <div class="col-sm-1"><span class="table-index">{{i}}</span>{{record.regionName}}</div>
+                    <div class="col-sm-1">{{record.yearMonth}}</div>
+                    <div class="col-sm-1">{{record.%FieldNumberFirstLetterLower%}}</div>
+                    <div class="col-sm-1">{{record.count%ClassName%}}</div>
+                </div>
+            </ng-container>
+            <div class="row mis-footer">
+                <div class="col-sm-1">{{'general.Total' | translate}}</div>
+                <div class="col-sm-1"></div>
+                <div class="col-sm-1">%LINEFEED%                    {{%ClassNameLowercase%ByRegionRecordsInfo.getTotal(%FieldSumIndex%)}}%LINEFEED%                </div>
+                <div class="col-sm-1">
+                    {{%ClassNameLowercase%ByRegionRecordsInfo.getTotal(%FieldStatCount%)}}
+                </div>
+            </div>
+        </div>
+        <div *ngIf="%ClassNameLowercase%ByRegionRecordsInfo.showBar">
+            <div *ngIf="%ClassNameLowercase%ByRegionRecordsInfo.data.length > 0" [style.height.px]="%ClassNameLowercase%ByRegionRecordsInfo.barChartHeight">
+                <canvas baseChart
+                        [datasets]="%ClassNameLowercase%ByRegionRecordsInfo.data"
+                        [labels]="%ClassNameLowercase%ByRegionRecordsInfo.label"
+                        [options]="barChartOptions"
+                        [legend]="%ClassNameLowercase%ByRegionRecordsInfo.showLegend"
+                        [chartType]="%ClassNameLowercase%ByRegionRecordsInfo.barChartType"
+                        (chartHover)="chartHovered($event)"
+                        (chartClick)="chartClicked($event)"
+                        height="{{%ClassNameLowercase%ByRegionRecordsInfo.barChartHeight}}"
+                        [style.height.px]="%ClassNameLowercase%ByRegionRecordsInfo.barChartHeight"></canvas>
+            </div>
+        </div>
+
+        <p>&nbsp;</p>
+    </tab>
+
+
+
+////////////////////
+%ModuleNameLowercase%report/%ModuleNameLowercase%.componentreport.ts:
+
+import {
+    %ClassName%, %ClassName%ByCenterRecord
+} from '../../models/%ModuleNameLowercase%';
+
+    public langs: string[] = [
+		'%ModuleNameLowercase%.%ClassName%%FieldNumber%', 
+		'%ModuleNameLowercase%.%ClassName%Count'];
+
+
+	/// onLangChange : 
+	
+            this.%ClassNameLowercase%SumByCenterRecordsInfo.addDataSetLabel(
+                [
+				'%ModuleNameLowercase%.%ClassName%%FieldNumber%',
+				'%ModuleNameLowercase%.%ClassName%Count'], this.translatedLangs);
+            this.%ClassNameLowercase%ByCenterRecordsInfo.addDataSetLabel(
+                [
+				'%ModuleNameLowercase%.%ClassName%%FieldNumber%', 
+				'%ModuleNameLowercase%.%ClassName%Count'], this.translatedLangs);
+            this.%ClassNameLowercase%SumByRegionRecordsInfo.addDataSetLabel(
+                [
+				'%ModuleNameLowercase%.%ClassName%%FieldNumber%', 
+				'%ModuleNameLowercase%.%ClassName%Count'], this.translatedLangs);
+            this.%ClassNameLowercase%ByRegionRecordsInfo.addDataSetLabel(
+                [
+				'%ModuleNameLowercase%.%ClassName%%FieldNumber%', 
+				'%ModuleNameLowercase%.%ClassName%Count'], this.translatedLangs);
+
+
+    // %ClassNameLowercase% report
+    public %ClassNameLowercase%SumByCenterRecords: %ClassName%ByCenterRecord[] = [];
+    public %ClassNameLowercase%ByCenterRecords: %ClassName%ByCenterRecord[] = [];
+
+    public %ClassNameLowercase%SumByCenterRecordsInfo = new TableChartInfoClass(%FieldStatCount+1%);
+    public %ClassNameLowercase%ByCenterRecordsInfo = new TableChartInfoClass(%FieldStatCount+1%);
+
+    public %ClassNameLowercase%ByCenterSortOrder = '';
+    public %ClassNameLowercase%ByCenterSortBy = '';
+
+    public sort%ClassName%Center(sortBy: string) {
+        this.%ClassNameLowercase%ByCenterSortOrder = this.%ClassNameLowercase%ByCenterSortOrder == 'desc' ? 'asc' : 'desc';
+        this.%ClassNameLowercase%ByCenterSortBy = sortBy + '-' + this.%ClassNameLowercase%ByCenterSortOrder;
+        this.query%ClassName%ByCenter();
+    }
+
+    public query%ClassName%ByCenter() {
+        this.showWait();
+
+        var optionSum: QueryOption = {
+            monthFromTo: this.queryMonth,
+            groupBy: "region-center",
+            sortBy: this.%ClassNameLowercase%ByCenterSortBy
+        };
+
+        this.%ClassNameLowercase%SumByCenterRecordsInfo.label = [];
+        this.http.post(this.baseUrl + 'api/%ModuleName%Report/Get%ClassName%ReportMonthly', optionSum).subscribe(result => {
+            this.%ClassNameLowercase%SumByCenterRecords = result.json() as %ClassName%ByCenterRecord[];
+
+            this.%ClassNameLowercase%SumByCenterRecordsInfo.resetAllData();
+
+            for (var i = 0; i < this.%ClassNameLowercase%SumByCenterRecords.length; i++) {
+                var record = this.%ClassNameLowercase%SumByCenterRecords[i];
+
+                this.%ClassNameLowercase%SumByCenterRecordsInfo.label.push(record.regionName + " - " + record.centerName);
+                this.%ClassNameLowercase%SumByCenterRecordsInfo.data[%FieldIndex%].data.push(record.%FieldNumberFirstLetterLower%);
+                this.%ClassNameLowercase%SumByCenterRecordsInfo.data[%FieldStatCount%].data.push(record.count%ClassName%);
+            }
+            this.%ClassNameLowercase%SumByCenterRecordsInfo.barChartHeight = this.%ClassNameLowercase%SumByCenterRecords.length * 50;
+
+            this.stopWait();
+        }, error => {
+            this.showError(error);
+            this.stopWait();
+        });
+
+        var option: QueryOption = {
+            monthFromTo: this.queryMonth,
+            groupBy: "region-center-yearmonth",
+            sortBy: this.%ClassNameLowercase%ByCenterSortBy
+        };
+
+        this.%ClassNameLowercase%ByCenterRecordsInfo.label = [];
+
+        this.http.post(this.baseUrl + 'api/%ModuleName%Report/Get%ClassName%ReportMonthly', option).subscribe(result => {
+            this.%ClassNameLowercase%ByCenterRecords = result.json() as %ClassName%ByCenterRecord[];
+
+            this.%ClassNameLowercase%ByCenterRecordsInfo.resetAllData();
+
+            for (var i = 0; i < this.%ClassNameLowercase%ByCenterRecords.length; i++) {
+                var record = this.%ClassNameLowercase%ByCenterRecords[i];
+
+                this.%ClassNameLowercase%ByCenterRecordsInfo.label.push(`${record.regionName}-${record.centerName}-${record.yearMonth}`);
+                this.%ClassNameLowercase%ByCenterRecordsInfo.data[%FieldIndex%].data.push(record.%FieldNumberFirstLetterLower%);
+                this.%ClassNameLowercase%ByCenterRecordsInfo.data[%FieldStatCount%].data.push(record.count%ClassName%);
+            }
+            this.%ClassNameLowercase%ByCenterRecordsInfo.barChartHeight = this.%ClassNameLowercase%ByCenterRecords.length * 50;
+
+            this.stopWait();
+        }, error => {
+            this.showError(error);
+            this.stopWait();
+        });
+    }
+
+    public export%ClassName%ByCenterRecords() {
+        var content = "<table border=1>";
+
+        var columns = ['general.Region', 'general.Center', 'general.YearMonth', 
+		'%ModuleNameLowercase%.%ClassName%%FieldNumber%', 
+		'%ModuleNameLowercase%.%ClassName%Count'];
+        this.translate.get(columns).subscribe((res: any) => {
+            content += TableChartInfoClass.getColumnExportString(columns, res);
+            for (var i = 0; i < this.%ClassNameLowercase%ByCenterRecords.length; i++) {
+                var record: %ClassName%ByCenterRecord = this.%ClassNameLowercase%ByCenterRecords[i];
+                content += `<tr><td>${record.regionName}</td><td>${record.centerName}</td><td>${record.yearMonth}</td>
+				<td>${record.%FieldNumberFirstLetterLower%}</td>
+				<td>${record.count%ClassName%}</td></tr>`;
+            }
+            content += "</table>";
+            DownloadClass.downloadFile(`%ClassName%ByCenterAndYearMonth-${this.queryMonth.monthFrom}-${this.queryMonth.monthTo}_`, content);
+        });
+    }
+
+    public export%ClassNameLowercase%SumByCenterRecords() {
+        var content = "<table border=1>";
+        var columns = ['general.Region', 'general.Center', 
+		'%ModuleNameLowercase%.%ClassName%%FieldNumber%', 
+		'%ModuleNameLowercase%.%ClassName%Count'];
+        this.translate.get(columns).subscribe((res: any) => {
+            content += TableChartInfoClass.getColumnExportString(columns, res);
+            for (var i = 0; i < this.%ClassNameLowercase%SumByCenterRecords.length; i++) {
+                var record: %ClassName%ByCenterRecord = this.%ClassNameLowercase%SumByCenterRecords[i];
+                content += `<tr><td>${record.regionName}</td><td>${record.centerName}</td>
+				<td>${record.%FieldNumberFirstLetterLower%}</td>
+				<td>${record.count%ClassName%}</td></tr>`;
+            }
+            content += "</table>";
+            DownloadClass.downloadFile(`%ClassNameLowercase%SumByCenter-${this.queryMonth.monthFrom}-${this.queryMonth.monthTo}_`, content);
+        });
+    }
+
+    public %ClassNameLowercase%SumByRegionRecords: %ClassName%ByCenterRecord[] = [];
+    public %ClassNameLowercase%ByRegionRecords: %ClassName%ByCenterRecord[] = [];
+
+    public %ClassNameLowercase%SumByRegionRecordsInfo = new TableChartInfoClass(%FieldStatCount+1%);
+    public %ClassNameLowercase%ByRegionRecordsInfo = new TableChartInfoClass(%FieldStatCount+1%);
+
+    public %ClassNameLowercase%ByRegionSortOrder = '';
+    public %ClassNameLowercase%ByRegionSortBy = '';
+
+    public sort%ClassName%Region(sortBy: string) {
+        this.%ClassNameLowercase%ByRegionSortOrder = this.%ClassNameLowercase%ByRegionSortOrder == 'desc' ? 'asc' : 'desc';
+        this.%ClassNameLowercase%ByRegionSortBy = sortBy + '-' + this.%ClassNameLowercase%ByRegionSortOrder;
+        this.query%ClassName%ByRegion();
+    }
+
+    public query%ClassName%ByRegion() {
+        this.showWait();
+
+        var optionSum: QueryOption = {
+            monthFromTo: this.queryMonth,
+            groupBy: "region",
+            sortBy: this.%ClassNameLowercase%ByRegionSortBy
+        };
+        this.%ClassNameLowercase%SumByRegionRecordsInfo.label = [];
+
+        this.http.post(this.baseUrl + 'api/%ModuleName%Report/Get%ClassName%ReportMonthly', optionSum).subscribe(result => {
+            this.%ClassNameLowercase%SumByRegionRecords = result.json() as %ClassName%ByCenterRecord[];
+
+            this.%ClassNameLowercase%SumByRegionRecordsInfo.resetAllData();
+
+            for (var i = 0; i < this.%ClassNameLowercase%SumByRegionRecords.length; i++) {
+                var record = this.%ClassNameLowercase%SumByRegionRecords[i];
+
+                this.%ClassNameLowercase%SumByRegionRecordsInfo.label.push(record.regionName);
+                this.%ClassNameLowercase%SumByRegionRecordsInfo.data[%FieldIndex%].data.push(record.%FieldNumberFirstLetterLower%);
+                this.%ClassNameLowercase%SumByRegionRecordsInfo.data[%FieldStatCount%].data.push(record.count%ClassName%);
+            }
+            this.%ClassNameLowercase%SumByRegionRecordsInfo.barChartHeight = this.%ClassNameLowercase%SumByRegionRecords.length * 50;
+
+            this.stopWait();
+        }, error => {
+            this.showError(error);
+            this.stopWait();
+        });
+
+        var option: QueryOption = {
+            monthFromTo: this.queryMonth,
+            groupBy: "region-yearmonth",
+            sortBy: this.%ClassNameLowercase%ByRegionSortBy
+        };
+
+        this.%ClassNameLowercase%ByRegionRecordsInfo.label = [];
+        this.http.post(this.baseUrl + 'api/%ModuleName%Report/Get%ClassName%ReportMonthly', option).subscribe(result => {
+            this.%ClassNameLowercase%ByRegionRecords = result.json() as %ClassName%ByCenterRecord[];
+
+            this.%ClassNameLowercase%ByRegionRecordsInfo.resetAllData();
+
+            for (var i = 0; i < this.%ClassNameLowercase%ByRegionRecords.length; i++) {
+                var record = this.%ClassNameLowercase%ByRegionRecords[i];
+
+                this.%ClassNameLowercase%ByRegionRecordsInfo.label.push(`${record.regionName}-${record.yearMonth}`);
+                this.%ClassNameLowercase%ByRegionRecordsInfo.data[%FieldIndex%].data.push(record.%FieldNumberFirstLetterLower%);
+                this.%ClassNameLowercase%ByRegionRecordsInfo.data[%FieldStatCount%].data.push(record.count%ClassName%);
+            }
+            this.%ClassNameLowercase%ByRegionRecordsInfo.barChartHeight = this.%ClassNameLowercase%ByRegionRecords.length * 50;
+
+            this.stopWait();
+        }, error => {
+            this.showError(error);
+            this.stopWait();
+        });
+    }
+
+    public export%ClassName%ByRegionRecords() {
+        var content = "<table border=1>";
+        var columns = ['general.Region', 'general.YearMonth', 
+		'%ModuleNameLowercase%.%ClassName%%FieldNumber%', 
+		'%ModuleNameLowercase%.%ClassName%Count'];
+
+        this.translate.get(columns).subscribe((res: any) => {
+            content += TableChartInfoClass.getColumnExportString(columns, res);
+            for (var i = 0; i < this.%ClassNameLowercase%ByRegionRecords.length; i++) {
+                var record: %ClassName%ByCenterRecord = this.%ClassNameLowercase%ByRegionRecords[i];
+                content += `<tr><td>${record.regionName}</td><td>${record.yearMonth}</td>
+				<td>${record.%FieldNumberFirstLetterLower%}</td>
+				<td>${record.count%ClassName%}</td></tr>`;
+            }
+            content += "</table>";
+            DownloadClass.downloadFile(`%ClassName%ByRegionRecords-${this.queryMonth.monthFrom}-${this.queryMonth.monthTo}_`, content);
+        });
+    }
+
+    public export%ClassNameLowercase%SumByRegionRecords() {
+        var content = "<table border=1>";
+        var columns = ['general.Region', 
+		'%ModuleNameLowercase%.%ClassName%%FieldNumber%', 
+		'%ModuleNameLowercase%.%ClassName%Count'];
+        this.translate.get(columns).subscribe((res: any) => {
+            content += TableChartInfoClass.getColumnExportString(columns, res);
+            for (var i = 0; i < this.%ClassNameLowercase%SumByRegionRecords.length; i++) {
+                var record: %ClassName%ByCenterRecord = this.%ClassNameLowercase%SumByRegionRecords[i];
+                content += `<tr><td>${record.regionName}</td>
+				<td>${record.%FieldNumberFirstLetterLower%}</td>
+				<td>${record.count%ClassName%}</td></tr>`;
+            }
+            content += "</table>";
+            DownloadClass.downloadFile(`%ClassNameLowercase%SumByRegionRecords-${this.queryMonth.monthFrom}-${this.queryMonth.monthTo}_`, content);
+        });
+    }
+
+
+
+////////////////////
+wwwroot/assets/i18n/en.json
+
+
+  "%ModuleNameLowercase%": {
+    "%ContextName%": "%ClassNameWithSpace%s",
+    "Delete%ClassName%Confirm": "Are you sure to delete this %ClassNameWithSpace%?",
+    "%ClassName%%Field%": "%FieldWithSpace%",
+    "CreateNew%ClassName%": "Create New %ClassNameWithSpace%",
+    "Import%ClassName%": "Import %ClassNameWithSpace%",
+    "PleasePaste%ClassName%": "Please paste the copied %ClassNameWithSpace% records below.",
+    "%ClassName%Count": "Number of %ClassNameWithSpace%s"
+  },
+  "%ModuleNameLowercase%report": {
+    "%ClassName%ByCenter": "%ClassNameWithSpace% Report By Center",
+    "%ClassName%ByRegion": "%ClassNameWithSpace% Report By Region"
+  }
+
+
+
+////////////////////
+
+import { %ModuleName%Component } from './components/%ModuleNameLowercase%/%ModuleNameLowercase%.component';
+
+@NgModule({
+    declarations: [
+        ...
+        %ModuleName%Component,
+        ...
+    ],
+    imports: [
+        ...
+        RouterModule.forRoot([
+            { path: 'datas', component: %ModuleName%Component },
+        ])
+    ]
+})
